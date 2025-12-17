@@ -90,7 +90,7 @@ footer {visibility: hidden;}
 # ==========================================================
 # GEMINI CONFIG (STREAMLIT CLOUD SAFE)
 # ==========================================================
-API_KEY = os.getenv("AIzaSyBCuOYAkp9YUyvTYc-GIRWmLjU8DkozI2o")
+API_KEY = os.getenv("GOOGLE_API_KEY")
 
 if not API_KEY:
     st.error("❌ GOOGLE_API_KEY not found. Add it in Streamlit Secrets.")
