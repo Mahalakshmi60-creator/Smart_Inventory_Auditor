@@ -92,7 +92,7 @@ footer {visibility: hidden;}
 
 API_KEY = "AIzaSyA7pZ6nYAx5YvqaSfG7NX6CqiW4bFzVOm4"
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel("gemini-2.5-flash")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 # ==========================================================
 # MOCK INVENTORY DB (Function Calling Simulation)
@@ -114,22 +114,19 @@ def check_inventory(item):
 # ==========================================================
 # GEMINI AGENT (ROBUST JSON EXTRACTION)
 # ==========================================================
-def audit_item(image):
+from PIL import Image
+
+def audit_item(image_file):
+    image = Image.open(image_file)
+
     prompt = """
-You are an inventory auditing AI.
-
-Identify the main object in the image.
-
-Respond ONLY in valid JSON:
-
-{
-  "item": "item_name",
-  "confidence": "short reasoning"
-}
-"""
+    You are a smart inventory auditor.
+    Identify the product, estimate quantity,
+    detect defects, and give suggestions.
+    """
 
     response = model.generate_content([prompt, image])
-    raw = response.text.strip()
+    return response.text
 
     match = re.search(r"\{.*\}", raw, re.DOTALL)
     if not match:
