@@ -2,8 +2,8 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 import json
-import os
 import re
+import os
 import base64
 
 # ==========================================================
@@ -16,10 +16,12 @@ st.set_page_config(
 )
 
 # ==========================================================
-# BACKGROUND IMAGE (LOCAL / URL)
+# BACKGROUND IMAGE
 # ==========================================================
-def set_bg(image_file):
-    with open(image_file, "rb") as f:
+def set_bg(image_path):
+    if not os.path.exists(image_path):
+        return
+    with open(image_path, "rb") as f:
         encoded = base64.b64encode(f.read()).decode()
 
     st.markdown(
@@ -36,32 +38,31 @@ def set_bg(image_file):
         unsafe_allow_html=True
     )
 
-# 🔴 Place a background image named bg.jpg in project folder
+# Put bg.jpg in same folder
 set_bg("bg.jpg")
 
 # ==========================================================
-# ADVANCED STYLES + ANIMATIONS
+# STYLES + ANIMATIONS
 # ==========================================================
 st.markdown("""
 <style>
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 @keyframes float {
   0% { transform: translateY(0px); }
-  50% { transform: translateY(-8px); }
+  50% { transform: translateY(-6px); }
   100% { transform: translateY(0px); }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
-}
-
 .glass {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255,255,255,0.15);
   backdrop-filter: blur(14px);
-  border-radius: 24px;
-  padding: 30px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  border-radius: 22px;
+  padding: 28px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
   animation: fadeIn 1.2s ease-in;
   color: white;
 }
@@ -69,17 +70,17 @@ st.markdown("""
 .card {
   background: rgba(0,0,0,0.35);
   border-radius: 18px;
-  padding: 18px;
+  padding: 15px;
   animation: float 4s ease-in-out infinite;
 }
 
 .badge {
-  padding: 8px 20px;
+  padding: 8px 18px;
   border-radius: 20px;
   font-weight: bold;
   color: black;
   display: inline-block;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 footer {visibility: hidden;}
@@ -87,22 +88,26 @@ footer {visibility: hidden;}
 """, unsafe_allow_html=True)
 
 # ==========================================================
-# GEMINI CONFIG
+# GEMINI CONFIG (STREAMLIT CLOUD SAFE)
 # ==========================================================
+API_KEY = os.getenv("AIzaSyBCuOYAkp9YUyvTYc-GIRWmLjU8DkozI2o")
 
-API_KEY = "AIzaSyA7pZ6nYAx5YvqaSfG7NX6CqiW4bFzVOm4"
+if not API_KEY:
+    st.error("❌ GOOGLE_API_KEY not found. Add it in Streamlit Secrets.")
+    st.stop()
+
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 # ==========================================================
-# MOCK INVENTORY DB (Function Calling Simulation)
+# MOCK INVENTORY DATABASE
 # ==========================================================
 INVENTORY_DB = {
     "bottle": {"stock": "Low", "count": 3},
-    "laptop": {"stock": "High", "count": 22},
-    "phone": {"stock": "Medium", "count": 11},
+    "laptop": {"stock": "High", "count": 24},
+    "phone": {"stock": "Medium", "count": 12},
     "mouse": {"stock": "High", "count": 40},
-    "keyboard": {"stock": "Low", "count": 4},
+    "keyboard": {"stock": "Low", "count": 5}
 }
 
 def check_inventory(item):
@@ -112,47 +117,35 @@ def check_inventory(item):
     })
 
 # ==========================================================
-# GEMINI AGENT (ROBUST JSON EXTRACTION)
+# GEMINI AGENT (NO IMAGE REOPENING ❗)
 # ==========================================================
-from PIL import Image
-import io
-
-def audit_item(image_file):
-    # Open image using PIL
-    image = Image.open(image_file)
-
-    # Convert PIL Image to bytes
-    img_bytes = io.BytesIO()
-    image.save(img_bytes, format=image.format or "PNG")
-    img_bytes = img_bytes.getvalue()
-
+def audit_item(image):
     prompt = """
-    You are a smart inventory auditor.
-    Identify the product, estimate quantity,
-    detect defects, and give suggestions.
-    """
+You are a smart inventory auditing AI.
 
-    response = model.generate_content([
-        prompt,
-        {
-            "mime_type": "image/png",
-            "data": img_bytes
-        }
-    ])
+Identify the main item in the image.
 
-    return response.text
+Respond ONLY in valid JSON:
 
+{
+  "item": "item_name",
+  "confidence": "short reasoning"
+}
+"""
 
-    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    response = model.generate_content([prompt, image])
+    raw_text = response.text.strip()
+
+    match = re.search(r"\{.*\}", raw_text, re.DOTALL)
     if not match:
-        st.error("Gemini response invalid")
-        st.code(raw)
+        st.error("❌ Gemini did not return JSON")
+        st.code(raw_text)
         return None
 
     try:
         return json.loads(match.group())
-    except:
-        st.error("JSON parse failed")
+    except json.JSONDecodeError:
+        st.error("❌ JSON parsing failed")
         st.code(match.group())
         return None
 
@@ -164,11 +157,11 @@ st.markdown('<div class="glass">', unsafe_allow_html=True)
 st.markdown("""
 <h1 style="text-align:center;">📦 Smart Inventory Auditor</h1>
 <p style="text-align:center;">
-Upload an image → Gemini AI identifies → Inventory action triggered
+Upload an image → Gemini AI identifies it → Inventory action triggered
 </p>
 """, unsafe_allow_html=True)
 
-uploaded = st.file_uploader("📷 Upload Item Image", type=["jpg", "jpeg", "png"])
+uploaded = st.file_uploader("📸 Upload item image", type=["jpg", "jpeg", "png"])
 
 if uploaded:
     image = Image.open(uploaded)
@@ -189,7 +182,7 @@ if uploaded:
 
         st.markdown(f"""
         **🧾 Item:** `{item}`  
-        **🧠 Reasoning:** {reason}  
+        **🧠 AI Reasoning:** {reason}  
         **📊 Stock Count:** {inv["count"]}
         """)
 
@@ -211,4 +204,9 @@ st.markdown('</div>', unsafe_allow_html=True)
 # ==========================================================
 # FOOTER
 # ==========================================================
-
+st.markdown("""
+<div style="text-align:center; color:#ddd; margin-top:30px;">
+🚀 Built with Streamlit + Gemini API<br>
+Theme 1 – Multimodal Function Calling
+</div>
+""", unsafe_allow_html=True)
