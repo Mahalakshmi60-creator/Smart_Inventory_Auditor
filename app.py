@@ -115,9 +115,16 @@ def check_inventory(item):
 # GEMINI AGENT (ROBUST JSON EXTRACTION)
 # ==========================================================
 from PIL import Image
+import io
 
 def audit_item(image_file):
+    # Open image using PIL
     image = Image.open(image_file)
+
+    # Convert PIL Image to bytes
+    img_bytes = io.BytesIO()
+    image.save(img_bytes, format=image.format or "PNG")
+    img_bytes = img_bytes.getvalue()
 
     prompt = """
     You are a smart inventory auditor.
@@ -125,8 +132,16 @@ def audit_item(image_file):
     detect defects, and give suggestions.
     """
 
-    response = model.generate_content([prompt, image])
+    response = model.generate_content([
+        prompt,
+        {
+            "mime_type": "image/png",
+            "data": img_bytes
+        }
+    ])
+
     return response.text
+
 
     match = re.search(r"\{.*\}", raw, re.DOTALL)
     if not match:
